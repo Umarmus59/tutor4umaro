@@ -5,8 +5,11 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import android.content.ContentValues;
 import android.content.Intent;
+import android.database.Cursor;
 import android.graphics.Bitmap;
+import android.net.Uri;
 import android.os.Bundle;
 import android.util.LruCache;
 import android.view.View;
@@ -34,22 +37,22 @@ import java.util.Arrays;
 import static android.widget.Toast.makeText;
 
 public class MainActivity extends AppCompatActivity {
-   /* Version[] versions = {
-            new Version("Cupcake", "API 3", R.drawable.cupcake),
-            new Version("Donut", "API 4", R.drawable.donut),
-            new Version("Eclair", "API 5, 6, 7", R.drawable.eclair),
-            new Version("Froyo", "API 8", R.drawable.froyo),
-            new Version("Gingerbread", "API 9, 10", R.drawable.gingerbread),
-            new Version("Honeycomb", "API 11, 12, 13", R.drawable.honeycomb),
-            new Version("Ice Cream Sandwich", "API 14, 15", R.drawable.ics),
-            new Version("Jelly Bean", "API 16, 17, 18", R.drawable.jellybean),
-            new Version("KitKat", "API 19", R.drawable.kitkat),
-            new Version("Lollipop", "API 21, 22", R.drawable.lollipop),
-            new Version("Marshmallow", "API 23", R.drawable.marshmallow),
-            new Version("Nougat", "API 24, 25", R.drawable.nougat),
-            new Version("Oreo", "API 26, 27", R.drawable.oreo)
-    };*/
-   ArrayList<Version> versions = new ArrayList<Version>();
+    /* Version[] versions = {
+             new Version("Cupcake", "API 3", R.drawable.cupcake),
+             new Version("Donut", "API 4", R.drawable.donut),
+             new Version("Eclair", "API 5, 6, 7", R.drawable.eclair),
+             new Version("Froyo", "API 8", R.drawable.froyo),
+             new Version("Gingerbread", "API 9, 10", R.drawable.gingerbread),
+             new Version("Honeycomb", "API 11, 12, 13", R.drawable.honeycomb),
+             new Version("Ice Cream Sandwich", "API 14, 15", R.drawable.ics),
+             new Version("Jelly Bean", "API 16, 17, 18", R.drawable.jellybean),
+             new Version("KitKat", "API 19", R.drawable.kitkat),
+             new Version("Lollipop", "API 21, 22", R.drawable.lollipop),
+             new Version("Marshmallow", "API 23", R.drawable.marshmallow),
+             new Version("Nougat", "API 24, 25", R.drawable.nougat),
+             new Version("Oreo", "API 26, 27", R.drawable.oreo)
+     };*/
+    ArrayList<Version> versions = new ArrayList<Version>();
     RequestQueue queue;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -60,36 +63,63 @@ public class MainActivity extends AppCompatActivity {
         MyAdapter myAdapter = new MyAdapter();
         //myAdapter.addElements(versions);
         recyclerView.setAdapter(myAdapter);
-        queue = Volley.newRequestQueue(this);
-        JsonArrayRequest request =
-                new JsonArrayRequest(Request.Method.GET, " https://raw.githubusercontent.com/kenobicjj/android/main/tutorial4.json",null,
-                new Response.Listener<JSONArray>() {
-                    @Override
-                    public void onResponse(JSONArray response) {
-                        versions.clear();
-                        for(int i = 0;i < response.length();i++) {
-                            try {
-                                JSONObject item = response.getJSONObject(i);
-                                String name = item.getString("name");
-                                String description = item.getString("description");
-                                String icon = item.getString("icon");
-                                Version version =new Version(name, description, icon);
-                                versions.add(version);
-                            } catch (JSONException e) {
-                                e.printStackTrace();
-                            }
-                        }
-                        myAdapter.addElements(versions);
-                    }
-                },
-                new Response.ErrorListener() {
-                    @Override
-                    public void onErrorResponse(VolleyError error) {
 
-                    }
-                }
-    );
-        queue.add(request);
+        Cursor cursor = getContentResolver().query(
+                Uri.parse("content://mmu.edu.my.recyclerview.provider"),
+                new String[]{"name","description","icon"}, null, null, "name");
+        queue = Volley.newRequestQueue(this);
+        if(cursor.getCount() == 0) {
+            JsonArrayRequest request =
+                    new JsonArrayRequest(Request.Method.GET, " https://raw.githubusercontent.com/kenobicjj/android/main/tutorial4.json",null,
+                            new Response.Listener<JSONArray>() {
+                                @Override
+                                public void onResponse(JSONArray response) {
+                                    versions.clear();
+                                    for(int i = 0;i < response.length();i++) {
+                                        try {
+                                            JSONObject item = response.getJSONObject(i);
+                                            String name = item.getString("name");
+                                            String description = item.getString("description");
+                                            String icon = item.getString("icon");
+                                            Version version =new Version(name, description, icon);
+                                            versions.add(version);
+                                            ContentValues values = new ContentValues(3);
+                                            values.put("name", name);
+                                            values.put("description", description);
+                                            values.put("icon", icon);
+                                            getContentResolver().insert(Uri.parse("content://mmu.edu.my.recyclerview.provider"), values);
+                                        } catch (JSONException e) {
+                                            e.printStackTrace();
+                                        }
+                                    }
+                                    myAdapter.addElements(versions);
+                                }
+                            },
+                            new Response.ErrorListener() {
+                                @Override
+                                public void onErrorResponse(VolleyError error) {
+
+                                }
+                            }
+                    );
+            queue.add(request);
+        } else {
+            cursor.moveToFirst();
+            while(!cursor.isAfterLast()) {
+                String name = cursor.getString(0);
+                String description = cursor.getString(1);
+                String icon = cursor.getString(2);
+                Version version = new Version(name, description, icon);
+                versions.add(version);
+                cursor.moveToNext();
+            }
+            cursor.close();
+            myAdapter.addElements(versions);
+        }
+
+
+
+
     }
     class MyAdapter extends RecyclerView.Adapter<MyAdapter.MyViewHolder> {
         ArrayList<Version> elements = new ArrayList<Version>();
